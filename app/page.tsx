@@ -19,6 +19,10 @@ export default function Home() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [postedId, setPostedId] = useState<string | null>(null);
+  const [postingId, setPostingId] = useState<string | null>(null);
+  const [linkedinConnected, setLinkedinConnected] = useState(false);
+  const [linkedinName, setLinkedinName] = useState<string>('');
   const [profileStatus, setProfileStatus] = useState<string>('');
   const [generateStatus, setGenerateStatus] = useState<string>('');
   const [postCount, setPostCount] = useState(3);
@@ -27,8 +31,50 @@ export default function Home() {
     if (status === 'authenticated') {
       loadProfile();
       loadDrafts();
+      checkLinkedin();
+    }
+    // Handle LinkedIn OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('linkedin') === 'connected') {
+      setTab('profile');
+      window.history.replaceState({}, '', '/');
+    } else if (params.get('linkedin') === 'error') {
+      setGenerateStatus('Failed to connect LinkedIn. Please try again.');
+      window.history.replaceState({}, '', '/');
     }
   }, [status]);
+
+  async function checkLinkedin() {
+    try {
+      const res = await fetch('/api/linkedin/status');
+      const data = await res.json();
+      setLinkedinConnected(data.connected);
+      if (data.name) setLinkedinName(data.name);
+    } catch {}
+  }
+
+  async function postToLinkedin(content: string, id: string, source?: string) {
+    setPostingId(id);
+    try {
+      const res = await fetch('/api/linkedin/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, source }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setPostedId(id);
+        setTimeout(() => setPostedId(null), 3000);
+      } else if (data.error?.includes('not connected') || data.error?.includes('expired')) {
+        window.location.href = '/api/auth/linkedin';
+      } else {
+        alert(data.error || 'Failed to post');
+      }
+    } catch {
+      alert('Failed to post to LinkedIn');
+    }
+    setPostingId(null);
+  }
 
   async function loadProfile() {
     try {
@@ -269,6 +315,19 @@ export default function Home() {
                       <button className="action-btn action-save" onClick={() => saveDraft(post, i)}>
                         {savedId === `gen-${i}` ? '✓ Saved' : 'Save draft'}
                       </button>
+                      {linkedinConnected ? (
+                        <button
+                          className="action-btn action-post"
+                          onClick={() => postToLinkedin(post.content, `gen-${i}`, post.source)}
+                          disabled={postingId === `gen-${i}`}
+                        >
+                          {postedId === `gen-${i}` ? '✓ Posted' : postingId === `gen-${i}` ? 'Posting...' : 'Post'}
+                        </button>
+                      ) : (
+                        <button className="action-btn action-post" onClick={() => { window.location.href = '/api/auth/linkedin'; }}>
+                          Connect LinkedIn
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -317,6 +376,19 @@ export default function Home() {
                         </button>
                         <button className="action-btn action-edit" onClick={() => setEditingPost(post)}>Edit</button>
                         <button className="action-btn action-delete" onClick={() => deleteDraft(post.id)}>Delete</button>
+                        {linkedinConnected ? (
+                          <button
+                            className="action-btn action-post"
+                            onClick={() => postToLinkedin(post.content, post.id, post.source)}
+                            disabled={postingId === post.id}
+                          >
+                            {postedId === post.id ? '✓ Posted' : postingId === post.id ? 'Posting...' : 'Post'}
+                          </button>
+                        ) : (
+                          <button className="action-btn action-post" onClick={() => { window.location.href = '/api/auth/linkedin'; }}>
+                            Connect LinkedIn
+                          </button>
+                        )}
                       </div>
                     </>
                   )}
@@ -328,7 +400,24 @@ export default function Home() {
 
         {tab === 'profile' && (
           <div className="tab-content">
-            <div className="section-label">YOUR PROFILE</div>
+            <div className="section-label">LINKEDIN CONNECTION</div>
+            <div className="linkedin-status-card">
+              {linkedinConnected ? (
+                <>
+                  <span className="linkedin-dot connected" />
+                  <span>Connected{linkedinName ? ` as ${linkedinName}` : ''}</span>
+                </>
+              ) : (
+                <>
+                  <span className="linkedin-dot disconnected" />
+                  <button className="action-btn action-post" onClick={() => { window.location.href = '/api/auth/linkedin'; }}>
+                    Connect LinkedIn
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="section-label" style={{ marginTop: 24 }}>YOUR PROFILE</div>
             <p className="section-desc">
               Paste your recent LinkedIn posts below. The app analyses your writing style, topics, and tone to generate posts that sound like you.
             </p>
@@ -423,6 +512,12 @@ export default function Home() {
         .action-save{background:transparent;color:var(--accent);border-color:var(--accent)}
         .action-edit{background:transparent;color:var(--muted);border-color:var(--border)}
         .action-delete{background:transparent;color:var(--error);border-color:#f5c6c2}
+        .action-post{background:#0a66c2;color:#fff;border-color:#0a66c2}
+        .action-post:disabled{opacity:0.6;cursor:not-allowed}
+        .linkedin-status-card{display:flex;align-items:center;gap:12px;background:var(--cream);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;font-size:14px}
+        .linkedin-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+        .linkedin-dot.connected{background:#2d6a4f}
+        .linkedin-dot.disconnected{background:var(--muted)}
         .edit-textarea{width:100%;background:var(--paper);border:1.5px solid var(--border);border-radius:8px;padding:12px;font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.65;color:var(--ink);resize:vertical}
         .edit-textarea:focus{outline:none;border-color:var(--accent)}
         .profile-textarea{width:100%;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--radius);padding:16px;font-family:'DM Sans',sans-serif;font-size:14px;line-height:1.65;color:var(--ink);resize:vertical;min-height:280px}

@@ -19,10 +19,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No profile posts provided' }, { status: 400 });
     }
 
-    const systemPrompt = `You are an expert LinkedIn ghostwriter and content strategist. You will:
+    const today = new Date().toISOString().split('T')[0];
+    const cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const systemPrompt = `You are an expert LinkedIn ghostwriter and content strategist.
+
+TODAY'S DATE: ${today}
+ABSOLUTE CUTOFF DATE: ${cutoffDate} (7 days ago)
+
+You will:
 1. Analyse the user's existing LinkedIn posts to extract their unique writing voice, topic profile, tone, and stylistic patterns
-2. Search the web for the most recent news (last 72 hours) that matches those topics — but ONLY articles NOT already covered by the user's existing posts
+2. Search the web for the most recent news that matches those topics — ONLY from the last 7 days (published on or after ${cutoffDate})
 3. Draft high-quality LinkedIn posts in the user's exact voice
+
+CRITICAL DATE RULES:
+- ONLY use articles published within the last 7 days (on or after ${cutoffDate})
+- When searching, add date filters like "after:${cutoffDate}" or "past week" to your searches
+- VERIFY the publication date of every article before using it
+- If an article has no clear publication date, DO NOT use it
+- REJECT any article older than 7 days — no exceptions
+- Include the article's publication date in the "publishedDate" field of your output
+- Prefer articles from the last 72 hours over older ones within the 7-day window
 
 STYLE ANALYSIS — extract from the user's posts:
 - Narrative structure (how they open, build, and close)
@@ -31,7 +48,7 @@ STYLE ANALYSIS — extract from the user's posts:
 - Vocabulary register (technical, strategic, analytical)
 - Perspective framing (first person observations, strategic insights)
 - Tone (authoritative but reflective, constructively critical of hype)
-- Topic clusters (AI agents, European sovereignty, open vs closed ecosystems, governance/security, practical AI workflows)
+- Topic clusters — infer from the user's actual posts, do not assume fixed topics
 
 POST GENERATION RULES:
 - Each post must be grounded in a SPECIFIC recent news article or development found via web search
@@ -52,18 +69,23 @@ OUTPUT FORMAT — respond with ONLY valid JSON, no other text:
     {
       "content": "The full post text here",
       "articleTitle": "Short title of the source article",
-      "source": "https://url-of-article.com"
+      "source": "https://url-of-article.com",
+      "publishedDate": "YYYY-MM-DD"
     }
   ]
 }`;
 
-    const userMessage = `Here are my existing LinkedIn posts — analyse my writing style and topic profile from these:
+    const userMessage = `Today is ${today}.
+
+Here are my existing LinkedIn posts — analyse my writing style and topic profile from these:
 
 ---
 ${posts}
 ---
 
-Now search the web for the most recent news (last 48-72 hours) that aligns with my topics but that I have NOT already posted about. Generate ${count} LinkedIn posts in my exact voice, each based on a different recent article. Return only the JSON.`;
+Now search the web for the most recent news (published ONLY in the last 7 days, after ${cutoffDate}) that aligns with my topics but that I have NOT already posted about. Prioritize articles from the last 72 hours. VERIFY each article's publication date — reject anything older than 7 days.
+
+Generate ${count} LinkedIn posts in my exact voice, each based on a different recent article. Include the publishedDate for each. Return only the JSON.`;
 
     // Use web search tool to find recent news
     const response = await client.messages.create({
@@ -133,12 +155,31 @@ Now search the web for the most recent news (last 48-72 hours) that aligns with 
 
     const parsed = JSON.parse(jsonMatch[0]);
 
-    // Strip any <cite> tags that leaked from web search citations
+    // Strip any <cite> tags and filter out stale posts
     if (parsed.posts && Array.isArray(parsed.posts)) {
-      for (const post of parsed.posts) {
+      const cutoff = new Date(cutoffDate).getTime();
+
+      parsed.posts = parsed.posts.filter((post: { content?: string; publishedDate?: string }) => {
+        // Strip cite tags
         if (post.content) {
           post.content = post.content.replace(/<\/?cite[^>]*>/g, '');
         }
+
+        // Filter out posts with articles older than 7 days
+        if (post.publishedDate) {
+          const articleDate = new Date(post.publishedDate).getTime();
+          if (articleDate < cutoff) {
+            console.log('Filtered out stale article from', post.publishedDate);
+            return false;
+          }
+        }
+        return true;
+      });
+
+      if (parsed.posts.length === 0) {
+        return NextResponse.json({
+          error: 'No recent enough articles found (within 7 days). Try again later.',
+        }, { status: 200 });
       }
     }
 

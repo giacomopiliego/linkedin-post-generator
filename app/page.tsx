@@ -5,7 +5,7 @@ import { useSession, signIn, signOut } from 'next-auth/react';
 
 type Tab = 'generate' | 'posts' | 'profile';
 type Post = { id: string; content: string; source?: string; generatedAt: string };
-type GeneratedPost = { content: string; source?: string; articleTitle?: string };
+type GeneratedPost = { content: string; source?: string; articleTitle?: string; publishedDate?: string };
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -296,11 +296,16 @@ export default function Home() {
                 {generatedPosts.map((post, i) => (
                   <div key={i} className="post-card post-card-generated">
                     {post.articleTitle && (
-                      post.source ? (
-                        <a href={post.source} target="_blank" rel="noopener noreferrer" className="post-source-tag" style={{ textDecoration: 'none' }}>↗ {post.articleTitle}</a>
-                      ) : (
-                        <div className="post-source-tag">↗ {post.articleTitle}</div>
-                      )
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        {post.source ? (
+                          <a href={post.source} target="_blank" rel="noopener noreferrer" className="post-source-tag" style={{ textDecoration: 'none' }}>↗ {post.articleTitle}</a>
+                        ) : (
+                          <span className="post-source-tag">↗ {post.articleTitle}</span>
+                        )}
+                        {post.publishedDate && (
+                          <span className="post-date">{new Date(post.publishedDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>
+                        )}
+                      </div>
                     )}
                     <div className="post-body">{post.content}</div>
                     {post.source && (

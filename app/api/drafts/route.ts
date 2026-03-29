@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { auth } from '@/auth';
 
 const DATA_DIR = join(process.cwd(), '.data');
 const DRAFTS_FILE = join(DATA_DIR, 'drafts.json');
@@ -36,6 +37,11 @@ async function kvSet(key: string, value: string): Promise<void> {
 }
 
 export async function GET() {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const kvData = await kvGet('drafts');
     if (kvData) {
@@ -54,6 +60,11 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const payload = JSON.stringify(body);

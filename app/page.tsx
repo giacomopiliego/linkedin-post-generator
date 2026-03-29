@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 type Tab = 'generate' | 'posts' | 'profile';
 type Post = { id: string; content: string; source?: string; generatedAt: string };
 type GeneratedPost = { content: string; source?: string; articleTitle?: string };
 
 export default function Home() {
+  const { data: session, status } = useSession();
   const [tab, setTab] = useState<Tab>('generate');
   const [savedPosts, setSavedPosts] = useState<string>('');
   const [loadedPosts, setLoadedPosts] = useState<string>('');
@@ -133,13 +135,63 @@ export default function Home() {
     setTimeout(() => setCopiedId(null), 2000);
   }
 
+  if (status === 'loading') {
+    return (
+      <div className="app-shell">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh' }}>
+          <span className="spinner" style={{ width: 32, height: 32, border: '3px solid #e0ddd7', borderTopColor: '#1a1a2e' }} />
+        </div>
+        <style>{`
+          *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+          html,body{background:#faf9f7;font-family:sans-serif;min-height:100dvh}
+          .app-shell{max-width:480px;margin:0 auto}
+          .spinner{border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block}
+          @keyframes spin{to{transform:rotate(360deg)}}
+        `}</style>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="app-shell">
+        <div className="login-screen">
+          <div className="login-card">
+            <div className="logo-mark" style={{ width: 56, height: 56, fontSize: 20, margin: '0 auto 20px' }}>GP</div>
+            <h1 style={{ fontFamily: "'DM Serif Display',serif", fontSize: 28, fontWeight: 400, marginBottom: 8 }}>PostCraft</h1>
+            <p style={{ color: '#6b6760', fontSize: 14, marginBottom: 32 }}>Sign in to access your LinkedIn post generator</p>
+            <button className="primary-btn" onClick={() => signIn('google')} style={{ maxWidth: 300 }}>
+              Sign in with Google
+            </button>
+          </div>
+        </div>
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+          *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+          html,body{background:#faf9f7;font-family:'DM Sans',sans-serif;min-height:100dvh}
+          .app-shell{max-width:480px;margin:0 auto}
+          .login-screen{display:flex;align-items:center;justify-content:center;min-height:100dvh;padding:24px}
+          .login-card{text-align:center}
+          .logo-mark{width:56px;height:56px;background:#c9a84c;color:#1a1a2e;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:20px}
+          .primary-btn{width:100%;padding:16px;background:#1a1a2e;color:#fff;border:none;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer}
+        `}</style>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
         <div className="header-inner">
           <div className="logo-mark">GP</div>
           <h1 className="app-title">PostCraft</h1>
-          <span className="app-sub">LinkedIn Intelligence</span>
+          <button className="sign-out-btn" onClick={() => signOut()} title="Sign out">
+            {session.user?.image ? (
+              <img src={session.user.image} alt="" className="avatar" />
+            ) : (
+              <span>Sign out</span>
+            )}
+          </button>
         </div>
       </header>
 
@@ -322,7 +374,8 @@ export default function Home() {
         .header-inner{display:flex;align-items:center;gap:12px}
         .logo-mark{width:36px;height:36px;background:var(--gold);color:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'DM Serif Display',serif;font-size:14px;flex-shrink:0}
         .app-title{font-family:'DM Serif Display',serif;font-size:22px;color:#fff;font-weight:400;letter-spacing:-0.3px}
-        .app-sub{font-size:11px;color:var(--gold);letter-spacing:1.5px;text-transform:uppercase;margin-left:auto;font-weight:500}
+        .sign-out-btn{margin-left:auto;background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center}
+        .avatar{width:32px;height:32px;border-radius:50%;border:2px solid var(--gold)}
         .app-main{flex:1;overflow-y:auto;padding:24px 20px 100px}
         .tab-content{display:flex;flex-direction:column;gap:16px}
         .section-label{font-size:11px;letter-spacing:2px;color:var(--gold);font-weight:600}

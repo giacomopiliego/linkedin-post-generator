@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { auth } from '@/auth';
 
 // Simple file-based storage for local dev; swap for Vercel KV in production
 const DATA_DIR = join(process.cwd(), '.data');
@@ -38,6 +39,11 @@ async function kvSet(key: string, value: string): Promise<void> {
 }
 
 export async function GET() {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     // Try KV first
     const kvData = await kvGet('profile');
@@ -58,6 +64,11 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const payload = JSON.stringify(body);

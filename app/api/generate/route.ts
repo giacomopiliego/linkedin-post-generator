@@ -75,12 +75,17 @@ OUTPUT FORMAT — respond with ONLY valid JSON, no other text:
   ]
 }`;
 
+    // Send only the most recent 30 posts to the AI for style analysis
+    const postSeparator = '\n\n---\n\n';
+    const allPosts = posts.split(postSeparator);
+    const recentPosts = allPosts.slice(0, 30).join(postSeparator);
+
     const userMessage = `Today is ${today}.
 
-Here are my existing LinkedIn posts — analyse my writing style and topic profile from these:
+Here are my most recent LinkedIn posts — analyse my writing style and topic profile from these:
 
 ---
-${posts}
+${recentPosts}
 ---
 
 Now search the web for the most recent news (published ONLY in the last 7 days, after ${cutoffDate}) that aligns with my topics but that I have NOT already posted about. Prioritize articles from the last 72 hours. VERIFY each article's publication date — reject anything older than 7 days.

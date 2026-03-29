@@ -24,8 +24,9 @@ export async function GET(req: NextRequest) {
   // Verify state
   const redis = getClient();
   const savedState = await redis.get('linkedin_oauth_state');
+  console.log('OAuth state check - received:', state, 'saved:', savedState);
   if (state !== savedState) {
-    console.error('LinkedIn OAuth state mismatch');
+    console.error('LinkedIn OAuth state mismatch - received:', state, 'saved:', savedState);
     return NextResponse.redirect(new URL('/?linkedin=error', req.url));
   }
   await redis.del('linkedin_oauth_state');
@@ -47,11 +48,14 @@ export async function GET(req: NextRequest) {
 
   if (!tokenRes.ok) {
     const err = await tokenRes.text();
-    console.error('LinkedIn token exchange failed:', err);
+    console.error('LinkedIn token exchange failed:', tokenRes.status, err);
+    console.error('Used redirect_uri:', redirectUri);
+    console.error('Used client_id:', process.env.LINKEDIN_CLIENT_ID);
     return NextResponse.redirect(new URL('/?linkedin=error', req.url));
   }
 
   const tokenData = await tokenRes.json();
+  console.log('LinkedIn token received, expires_in:', tokenData.expires_in);
 
   // Get LinkedIn user ID (sub from userinfo)
   const userInfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
@@ -59,11 +63,13 @@ export async function GET(req: NextRequest) {
   });
 
   if (!userInfoRes.ok) {
-    console.error('LinkedIn userinfo failed');
+    const err = await userInfoRes.text();
+    console.error('LinkedIn userinfo failed:', userInfoRes.status, err);
     return NextResponse.redirect(new URL('/?linkedin=error', req.url));
   }
 
   const userInfo = await userInfoRes.json();
+  console.log('LinkedIn user:', userInfo.sub, userInfo.name);
 
   // Store tokens and user info in Redis
   await redis.set('linkedin_tokens', JSON.stringify({

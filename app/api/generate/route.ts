@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { posts, count = 3 } = await req.json();
+    const { posts, count = 3, focus } = await req.json();
 
     if (!posts?.trim()) {
       return NextResponse.json({ error: 'No profile posts provided' }, { status: 400 });
@@ -80,6 +80,10 @@ OUTPUT FORMAT — respond with ONLY valid JSON, no other text:
     const allPosts = posts.split(postSeparator);
     const recentPosts = allPosts.slice(0, 30).join(postSeparator);
 
+    const focusInstruction = focus
+      ? `\n\nFOCUS DIRECTIVE: The user wants posts specifically about: "${focus}". Search for recent news SPECIFICALLY about this topic. All generated posts MUST be related to this focus area. Still write in the user's voice and style.`
+      : '';
+
     const userMessage = `Today is ${today}.
 
 Here are my most recent LinkedIn posts — analyse my writing style and topic profile from these:
@@ -88,7 +92,7 @@ Here are my most recent LinkedIn posts — analyse my writing style and topic pr
 ${recentPosts}
 ---
 
-Now search the web for the most recent news (published ONLY in the last 7 days, after ${cutoffDate}) that aligns with my topics but that I have NOT already posted about. Prioritize articles from the last 72 hours. VERIFY each article's publication date — reject anything older than 7 days.
+Now search the web for the most recent news (published ONLY in the last 7 days, after ${cutoffDate}) that aligns with ${focus ? `the focus topic "${focus}"` : 'my topics'} but that I have NOT already posted about. Prioritize articles from the last 72 hours. VERIFY each article's publication date — reject anything older than 7 days.${focusInstruction}
 
 Generate ${count} LinkedIn posts in my exact voice, each based on a different recent article. Include the publishedDate for each. Return only the JSON.`;
 

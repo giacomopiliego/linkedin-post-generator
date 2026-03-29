@@ -26,6 +26,7 @@ export default function Home() {
   const [profileStatus, setProfileStatus] = useState<string>('');
   const [generateStatus, setGenerateStatus] = useState<string>('');
   const [postCount, setPostCount] = useState(3);
+  const [focusTopics, setFocusTopics] = useState('');
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -126,7 +127,7 @@ export default function Home() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posts: loadedPosts, count: postCount }),
+        body: JSON.stringify({ posts: loadedPosts, count: postCount, focus: focusTopics.trim() || undefined }),
       });
       const data = await res.json();
       if (data.posts) {
@@ -256,6 +257,19 @@ export default function Home() {
             <p className="section-desc">
               Searches the last 72 hours of news matching your topic profile and drafts posts in your voice.
             </p>
+
+            <div className="focus-row">
+              <label className="count-label" htmlFor="focus-input">Focus topics (optional)</label>
+              <input
+                id="focus-input"
+                className="focus-input"
+                type="text"
+                value={focusTopics}
+                onChange={e => setFocusTopics(e.target.value)}
+                placeholder="e.g. Google Cloud Next, EU AI Act..."
+              />
+              <span className="focus-hint">Leave empty for auto-detect from your profile</span>
+            </div>
 
             <div className="count-row">
               <span className="count-label">Posts to generate</span>
@@ -486,6 +500,11 @@ export default function Home() {
         .tab-content{display:flex;flex-direction:column;gap:16px}
         .section-label{font-size:11px;letter-spacing:2px;color:var(--gold);font-weight:600}
         .section-desc{font-size:14px;color:var(--muted);line-height:1.5}
+        .focus-row{display:flex;flex-direction:column;gap:8px;background:var(--cream);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
+        .focus-input{width:100%;background:var(--paper);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--ink)}
+        .focus-input:focus{outline:none;border-color:var(--accent)}
+        .focus-input::placeholder{color:var(--muted)}
+        .focus-hint{font-size:11px;color:var(--muted)}
         .count-row{display:flex;align-items:center;justify-content:space-between;background:var(--cream);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
         .count-label{font-size:14px;color:var(--ink);font-weight:500}
         .count-controls{display:flex;gap:6px}

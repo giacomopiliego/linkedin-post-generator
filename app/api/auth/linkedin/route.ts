@@ -20,7 +20,7 @@ export async function GET() {
     client_id: process.env.LINKEDIN_CLIENT_ID!,
     redirect_uri: `${process.env.NEXTAUTH_URL || 'https://linkedin-post-generator-ashy.vercel.app'}/api/auth/linkedin/callback`,
     state,
-    scope: 'w_member_social',
+    scope: 'openid profile w_member_social',
   });
 
   return NextResponse.redirect(

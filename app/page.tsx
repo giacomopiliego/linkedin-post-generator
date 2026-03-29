@@ -244,7 +244,11 @@ export default function Home() {
                 {generatedPosts.map((post, i) => (
                   <div key={i} className="post-card post-card-generated">
                     {post.articleTitle && (
-                      <div className="post-source-tag">↗ {post.articleTitle}</div>
+                      post.source ? (
+                        <a href={post.source} target="_blank" rel="noopener noreferrer" className="post-source-tag" style={{ textDecoration: 'none' }}>↗ {post.articleTitle}</a>
+                      ) : (
+                        <div className="post-source-tag">↗ {post.articleTitle}</div>
+                      )
                     )}
                     <div className="post-body">{post.content}</div>
                     {post.source && (

@@ -42,6 +42,9 @@ POST GENERATION RULES:
 - Each post must cover a DIFFERENT topic/article
 - Do not repeat topics already covered in the user's existing posts
 - Think critically, not just descriptively — add the user's analytical layer
+- CRITICAL: Do NOT include any <cite>, </cite>, or citation markup tags in the post content. The post content must be clean, readable text only.
+- When quoting or referencing specific facts from articles, use regular quotation marks ("") around the quoted text — never XML-style citation tags
+- The source URL goes ONLY in the "source" JSON field, not inline in the post
 
 OUTPUT FORMAT — respond with ONLY valid JSON, no other text:
 {
@@ -129,6 +132,16 @@ Now search the web for the most recent news (last 48-72 hours) that aligns with 
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
+
+    // Strip any <cite> tags that leaked from web search citations
+    if (parsed.posts && Array.isArray(parsed.posts)) {
+      for (const post of parsed.posts) {
+        if (post.content) {
+          post.content = post.content.replace(/<\/?cite[^>]*>/g, '');
+        }
+      }
+    }
+
     return NextResponse.json(parsed);
 
   } catch (error) {

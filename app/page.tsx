@@ -23,9 +23,11 @@ export default function Home() {
   const [postCount, setPostCount] = useState(3);
 
   useEffect(() => {
-    loadProfile();
-    loadDrafts();
-  }, []);
+    if (status === 'authenticated') {
+      loadProfile();
+      loadDrafts();
+    }
+  }, [status]);
 
   async function loadProfile() {
     try {

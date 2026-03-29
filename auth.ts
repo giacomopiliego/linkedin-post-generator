@@ -12,7 +12,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn({ user }) {
       const allowed = process.env.ALLOWED_EMAIL;
       if (!allowed) return true;
-      return user.email === allowed;
+      const emails = allowed.split(',').map(e => e.trim());
+      return emails.includes(user.email ?? '');
     },
   },
 });

@@ -58,14 +58,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to post to LinkedIn' }, { status: 500 });
     }
 
-    // Save to profile posts for future style analysis
-    const profileData = await redis.get('profile');
-    if (profileData) {
-      const profile = JSON.parse(profileData as string);
-      if (profile.posts) {
-        profile.posts = `${content}\n\n---\n\n${profile.posts}`;
-        await redis.set('profile', JSON.stringify(profile));
+    // Save to profile posts for future style analysis (keep last 30 posts)
+    const MAX_PROFILE_POSTS = 30;
+    try {
+      const profileData = await redis.get('profile');
+      let existingPosts = '';
+      if (profileData) {
+        const profile = JSON.parse(profileData as string);
+        existingPosts = profile.posts || '';
       }
+
+      // Split existing posts by separator, prepend new post, trim to 30
+      const postSeparator = '\n\n---\n\n';
+      const allPosts = existingPosts
+        ? [content, ...existingPosts.split(postSeparator)]
+        : [content];
+      const trimmedPosts = allPosts.slice(0, MAX_PROFILE_POSTS);
+      const updatedPosts = trimmedPosts.join(postSeparator);
+
+      await redis.set('profile', JSON.stringify({ posts: updatedPosts }));
+      console.log(`Profile updated: ${trimmedPosts.length} posts stored (max ${MAX_PROFILE_POSTS})`);
+    } catch (profileErr) {
+      // Don't fail the whole request if profile update fails
+      console.error('Failed to update profile with posted content:', profileErr);
     }
 
     return NextResponse.json({ ok: true });

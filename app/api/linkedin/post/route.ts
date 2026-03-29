@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Save to profile posts for future style analysis (keep last 30 posts)
-    const MAX_PROFILE_POSTS = 30;
+    const MAX_PROFILE_POSTS = 100;
     try {
       const profileData = await redis.get('profile');
       let existingPosts = '';

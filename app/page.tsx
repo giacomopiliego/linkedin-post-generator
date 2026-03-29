@@ -131,8 +131,9 @@ export default function Home() {
     });
   }
 
-  function copyPost(text: string, id: string) {
-    navigator.clipboard.writeText(text);
+  function copyPost(text: string, id: string, source?: string) {
+    const fullText = source ? `${text}\n\n${source}` : text;
+    navigator.clipboard.writeText(fullText);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   }
@@ -253,11 +254,11 @@ export default function Home() {
                     <div className="post-body">{post.content}</div>
                     {post.source && (
                       <a href={post.source} target="_blank" rel="noopener noreferrer" className="post-link">
-                        Source →
+                        {post.source}
                       </a>
                     )}
                     <div className="post-actions">
-                      <button className="action-btn action-copy" onClick={() => copyPost(post.content, `gen-${i}`)}>
+                      <button className="action-btn action-copy" onClick={() => copyPost(post.content, `gen-${i}`, post.source)}>
                         {copiedId === `gen-${i}` ? '✓ Copied' : 'Copy'}
                       </button>
                       <button className="action-btn action-save" onClick={() => saveDraft(post)}>
@@ -303,10 +304,10 @@ export default function Home() {
                       </div>
                       <div className="post-body">{post.content}</div>
                       {post.source && (
-                        <a href={post.source} target="_blank" rel="noopener noreferrer" className="post-link">Source →</a>
+                        <a href={post.source} target="_blank" rel="noopener noreferrer" className="post-link">{post.source}</a>
                       )}
                       <div className="post-actions">
-                        <button className="action-btn action-copy" onClick={() => copyPost(post.content, post.id)}>
+                        <button className="action-btn action-copy" onClick={() => copyPost(post.content, post.id, post.source)}>
                           {copiedId === post.id ? '✓ Copied' : 'Copy'}
                         </button>
                         <button className="action-btn action-edit" onClick={() => setEditingPost(post)}>Edit</button>
@@ -409,7 +410,7 @@ export default function Home() {
         .post-source-tag{font-size:11px;color:var(--gold);font-weight:600;letter-spacing:0.5px;text-transform:uppercase}
         .post-date{font-size:11px;color:var(--muted);letter-spacing:0.5px}
         .post-body{font-size:14px;line-height:1.65;color:var(--ink);white-space:pre-wrap;word-break:break-word}
-        .post-link{font-size:12px;color:var(--gold);text-decoration:none;font-weight:600;letter-spacing:0.3px}
+        .post-link{font-size:12px;color:var(--gold);text-decoration:none;font-weight:600;letter-spacing:0.3px;word-break:break-all}
         .post-actions{display:flex;gap:8px;flex-wrap:wrap}
         .action-btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1.5px solid;font-family:'DM Sans',sans-serif;transition:all 0.15s}
         .action-btn:active{transform:scale(0.96)}

@@ -12,10 +12,11 @@ export async function GET() {
     const redis = getClient();
     const data = await redis.get('profile');
     if (data) {
-      return NextResponse.json(JSON.parse(data));
+      return NextResponse.json(typeof data === 'string' ? JSON.parse(data) : data);
     }
     return NextResponse.json({ posts: '' });
-  } catch {
+  } catch (error) {
+    console.error('Profile GET error:', error);
     return NextResponse.json({ posts: '' });
   }
 }
@@ -31,7 +32,8 @@ export async function POST(req: NextRequest) {
     const redis = getClient();
     await redis.set('profile', JSON.stringify(body));
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    console.error('Profile POST error:', error);
     return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
   }
 }

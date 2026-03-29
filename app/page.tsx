@@ -18,6 +18,7 @@ export default function Home() {
   const [draftPosts, setDraftPosts] = useState<Post[]>([]);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [profileStatus, setProfileStatus] = useState<string>('');
   const [generateStatus, setGenerateStatus] = useState<string>('');
   const [postCount, setPostCount] = useState(3);
@@ -94,7 +95,7 @@ export default function Home() {
     setIsGenerating(false);
   }
 
-  async function saveDraft(post: GeneratedPost) {
+  async function saveDraft(post: GeneratedPost, index: number) {
     const newDraft: Post = {
       id: Date.now().toString(),
       content: post.content,
@@ -103,11 +104,15 @@ export default function Home() {
     };
     const updated = [newDraft, ...draftPosts];
     setDraftPosts(updated);
-    await fetch('/api/drafts', {
+    const res = await fetch('/api/drafts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ drafts: updated }),
     });
+    if (res.ok) {
+      setSavedId(`gen-${index}`);
+      setTimeout(() => setSavedId(null), 2000);
+    }
   }
 
   async function updateDraft(post: Post) {
@@ -261,8 +266,8 @@ export default function Home() {
                       <button className="action-btn action-copy" onClick={() => copyPost(post.content, `gen-${i}`, post.source)}>
                         {copiedId === `gen-${i}` ? '✓ Copied' : 'Copy'}
                       </button>
-                      <button className="action-btn action-save" onClick={() => saveDraft(post)}>
-                        Save draft
+                      <button className="action-btn action-save" onClick={() => saveDraft(post, i)}>
+                        {savedId === `gen-${i}` ? '✓ Saved' : 'Save draft'}
                       </button>
                     </div>
                   </div>

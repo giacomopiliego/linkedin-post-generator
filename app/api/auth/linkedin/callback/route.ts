@@ -57,26 +57,29 @@ export async function GET(req: NextRequest) {
   const tokenData = await tokenRes.json();
   console.log('LinkedIn token received, expires_in:', tokenData.expires_in);
 
-  // Get LinkedIn user ID (sub from userinfo)
-  const userInfoRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+  // Get LinkedIn user ID using /v2/me
+  const meRes = await fetch('https://api.linkedin.com/v2/me', {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
 
-  if (!userInfoRes.ok) {
-    const err = await userInfoRes.text();
-    console.error('LinkedIn userinfo failed:', userInfoRes.status, err);
+  if (!meRes.ok) {
+    const err = await meRes.text();
+    console.error('LinkedIn /v2/me failed:', meRes.status, err);
     return NextResponse.redirect(new URL('/?linkedin=error', req.url));
   }
 
-  const userInfo = await userInfoRes.json();
-  console.log('LinkedIn user:', userInfo.sub, userInfo.name);
+  const meData = await meRes.json();
+  const linkedinId = meData.id;
+  const firstName = meData.localizedFirstName || '';
+  const lastName = meData.localizedLastName || '';
+  console.log('LinkedIn user:', linkedinId, firstName, lastName);
 
   // Store tokens and user info in Redis
   await redis.set('linkedin_tokens', JSON.stringify({
     access_token: tokenData.access_token,
     expires_at: Date.now() + (tokenData.expires_in * 1000),
-    linkedin_sub: userInfo.sub,
-    linkedin_name: userInfo.name,
+    linkedin_sub: linkedinId,
+    linkedin_name: `${firstName} ${lastName}`.trim(),
   }));
 
   return NextResponse.redirect(new URL('/?linkedin=connected', req.url));

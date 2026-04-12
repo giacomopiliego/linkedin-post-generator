@@ -27,6 +27,7 @@ export default function Home() {
   const [generateStatus, setGenerateStatus] = useState<string>('');
   const [postCount, setPostCount] = useState(3);
   const [focusTopics, setFocusTopics] = useState('');
+  const [addedToProfileId, setAddedToProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -229,6 +230,34 @@ export default function Home() {
     }
   }
 
+  async function addToProfile(content: string, id: string) {
+    try {
+      const profileRes = await fetch('/api/profile');
+      const profileData = await profileRes.json();
+      const existingPosts = profileData.posts || '';
+
+      const postSeparator = '\n\n---\n\n';
+      const allPosts = existingPosts
+        ? [content, ...existingPosts.split(postSeparator)]
+        : [content];
+      const trimmedPosts = allPosts.slice(0, 100);
+      const updatedPosts = trimmedPosts.join(postSeparator);
+
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posts: updatedPosts }),
+      });
+      if (res.ok) {
+        setLoadedPosts(updatedPosts);
+        setAddedToProfileId(id);
+        setTimeout(() => setAddedToProfileId(null), 2000);
+      }
+    } catch (err) {
+      console.error('Failed to add to profile:', err);
+    }
+  }
+
   async function updateDraft(post: Post) {
     const updated = draftPosts.map(p => p.id === post.id ? post : p);
     setDraftPosts(updated);
@@ -400,6 +429,9 @@ export default function Home() {
                       </button>
                       <button className="action-btn action-save" onClick={() => saveDraft(post, i)}>
                         {savedId === `gen-${i}` ? '✓ Saved' : 'Save draft'}
+                      </button>
+                      <button className="action-btn action-save" onClick={() => addToProfile(post.content, `gen-${i}`)}>
+                        {addedToProfileId === `gen-${i}` ? '✓ Added' : 'Add to Profile'}
                       </button>
                       {linkedinConnected ? (
                         <button

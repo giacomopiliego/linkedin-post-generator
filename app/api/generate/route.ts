@@ -75,10 +75,10 @@ OUTPUT FORMAT — respond with ONLY valid JSON, no other text:
   ]
 }`;
 
-    // Send only the most recent 30 posts to the AI for style analysis
+    // Send only the most recent 10 posts to the AI for style analysis
     const postSeparator = '\n\n---\n\n';
     const allPosts = posts.split(postSeparator);
-    const recentPosts = allPosts.slice(0, 30).join(postSeparator);
+    const recentPosts = allPosts.slice(0, 10).join(postSeparator);
 
     const focusInstruction = focus
       ? `\n\nFOCUS DIRECTIVE: The user wants posts specifically about: "${focus}". Search for recent news SPECIFICALLY about this topic. All generated posts MUST be related to this focus area. Still write in the user's voice and style.`
@@ -103,7 +103,7 @@ Generate ${count} LinkedIn posts in my exact voice, each based on a different re
         try {
           const stream = client.messages.stream({
             model: 'claude-sonnet-4-20250514',
-            max_tokens: 4000,
+            max_tokens: 2000,
             system: systemPrompt,
             tools: [
               {

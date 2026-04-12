@@ -129,12 +129,79 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ posts: loadedPosts, count: postCount, focus: focusTopics.trim() || undefined }),
       });
-      const data = await res.json();
-      if (data.posts) {
-        setGeneratedPosts(data.posts);
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setGenerateStatus(data?.error || 'Something went wrong. Please try again.');
+        setIsGenerating(false);
+        return;
+      }
+
+      // Read the streaming response
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setGenerateStatus('Something went wrong. Please try again.');
+        setIsGenerating(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let fullText = '';
+
+      setGenerateStatus('Searching the web for recent news...');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+
+        // Update status once text generation begins
+        if (fullText.includes('{') && !fullText.includes('__STREAM_ERROR__')) {
+          setGenerateStatus('Writing posts in your voice...');
+        }
+      }
+
+      if (fullText.includes('__STREAM_ERROR__')) {
+        setGenerateStatus('Failed to generate posts. Please try again.');
+        setIsGenerating(false);
+        return;
+      }
+
+      // Parse JSON from the accumulated text
+      const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        setGenerateStatus('Could not parse generated posts. Please try again.');
+        setIsGenerating(false);
+        return;
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      if (parsed.posts && Array.isArray(parsed.posts)) {
+        const cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).getTime();
+
+        parsed.posts = parsed.posts.filter((post: { content?: string; publishedDate?: string }) => {
+          if (post.content) {
+            post.content = post.content.replace(/<\/?cite[^>]*>/g, '');
+          }
+          if (post.publishedDate) {
+            const articleDate = new Date(post.publishedDate).getTime();
+            if (articleDate < cutoffDate) return false;
+          }
+          return true;
+        });
+
+        if (parsed.posts.length === 0) {
+          setGenerateStatus('No recent enough articles found (within 7 days). Try again later.');
+          setIsGenerating(false);
+          return;
+        }
+
+        setGeneratedPosts(parsed.posts);
         setGenerateStatus('');
       } else {
-        setGenerateStatus(data.error || 'Something went wrong. Please try again.');
+        setGenerateStatus('Something went wrong. Please try again.');
       }
     } catch {
       setGenerateStatus('Error generating posts.');

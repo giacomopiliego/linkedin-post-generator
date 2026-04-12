@@ -96,103 +96,45 @@ Now search the web for the most recent news (published ONLY in the last 7 days, 
 
 Generate ${count} LinkedIn posts in my exact voice, each based on a different recent article. Include the publishedDate for each. Return only the JSON.`;
 
-    // Use web search tool to find recent news
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 4000,
-      system: systemPrompt,
-      tools: [
-        {
-          type: 'web_search_20250305',
-          name: 'web_search',
-        } as Parameters<typeof client.messages.create>[0]['tools'] extends Array<infer T> ? T : never,
-      ],
-      messages: [{ role: 'user', content: userMessage }],
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        try {
+          const stream = client.messages.stream({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 4000,
+            system: systemPrompt,
+            tools: [
+              {
+                type: 'web_search_20250305',
+                name: 'web_search',
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              } as any,
+            ],
+            messages: [{ role: 'user', content: userMessage }],
+          });
+
+          stream.on('text', (text) => {
+            controller.enqueue(encoder.encode(text));
+          });
+
+          await stream.finalMessage();
+          controller.close();
+        } catch (error) {
+          console.error('Stream error:', error);
+          controller.enqueue(encoder.encode('\n__STREAM_ERROR__'));
+          controller.close();
+        }
+      },
     });
 
-    // Extract the final text response
-    let finalText = '';
-    for (const block of response.content) {
-      if (block.type === 'text') {
-        finalText += block.text;
-      }
-    }
-
-    // Handle multi-turn if tool use required it
-    if (response.stop_reason === 'tool_use') {
-      // Continue conversation with tool results handled by Anthropic internally
-      // For web_search, the model handles it natively — just extract text blocks
-      const allMessages: Anthropic.MessageParam[] = [
-        { role: 'user', content: userMessage },
-        { role: 'assistant', content: response.content },
-      ];
-
-      // Add tool results and continue
-      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use');
-      const toolResults: Anthropic.ToolResultBlockParam[] = toolUseBlocks.map(b => ({
-        type: 'tool_result' as const,
-        tool_use_id: (b as Anthropic.ToolUseBlock).id,
-        content: 'Search completed.',
-      }));
-
-      allMessages.push({ role: 'user', content: toolResults });
-
-      const followUp = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
-        system: systemPrompt,
-        tools: [
-          {
-            type: 'web_search_20250305',
-            name: 'web_search',
-          } as Parameters<typeof client.messages.create>[0]['tools'] extends Array<infer T> ? T : never,
-        ],
-        messages: allMessages,
-      });
-
-      finalText = followUp.content
-        .filter(b => b.type === 'text')
-        .map(b => (b as Anthropic.TextBlock).text)
-        .join('');
-    }
-
-    // Parse JSON from response
-    const jsonMatch = finalText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return NextResponse.json({ error: 'Could not parse generated posts' }, { status: 500 });
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    // Strip any <cite> tags and filter out stale posts
-    if (parsed.posts && Array.isArray(parsed.posts)) {
-      const cutoff = new Date(cutoffDate).getTime();
-
-      parsed.posts = parsed.posts.filter((post: { content?: string; publishedDate?: string }) => {
-        // Strip cite tags
-        if (post.content) {
-          post.content = post.content.replace(/<\/?cite[^>]*>/g, '');
-        }
-
-        // Filter out posts with articles older than 7 days
-        if (post.publishedDate) {
-          const articleDate = new Date(post.publishedDate).getTime();
-          if (articleDate < cutoff) {
-            console.log('Filtered out stale article from', post.publishedDate);
-            return false;
-          }
-        }
-        return true;
-      });
-
-      if (parsed.posts.length === 0) {
-        return NextResponse.json({
-          error: 'No recent enough articles found (within 7 days). Try again later.',
-        }, { status: 200 });
-      }
-    }
-
-    return NextResponse.json(parsed);
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache',
+      },
+    });
 
   } catch (error) {
     console.error('Generate error:', error);

@@ -13,16 +13,30 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { posts, count = 3, focus } = await req.json();
+    const {
+      posts,
+      count = 3,
+      focus,
+      aboutMe,
+      articleUrl,
+      articleText,
+      articleTitle,
+    } = await req.json();
 
     if (!posts?.trim()) {
       return NextResponse.json({ error: 'No profile posts provided' }, { status: 400 });
     }
 
+    const articleMode = !!(articleText && articleUrl);
+
     const today = new Date().toISOString().split('T')[0];
     const cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    const systemPrompt = `You are an expert LinkedIn ghostwriter and content strategist.
+    const aboutMeBlock = aboutMe?.trim()
+      ? `\n\nUSER BACKGROUND & VOICE NOTES — use this to deepen voice match. This is who the user is and how they write:\n${aboutMe.trim()}\n`
+      : '';
+
+    const newsSystemPrompt = `You are an expert LinkedIn ghostwriter and content strategist.${aboutMeBlock}
 
 TODAY'S DATE: ${today}
 ABSOLUTE CUTOFF DATE: ${cutoffDate} (7 days ago)
@@ -75,6 +89,47 @@ OUTPUT FORMAT — respond with ONLY valid JSON, no other text:
   ]
 }`;
 
+    const articleSystemPrompt = `You are an expert LinkedIn ghostwriter and content strategist.${aboutMeBlock}
+
+TODAY'S DATE: ${today}
+
+You will:
+1. Analyse the user's existing LinkedIn posts to extract their unique writing voice, topic profile, tone, and stylistic patterns
+2. Read the article the user provides and draft ONE LinkedIn post in their exact voice based on it
+
+CRITICAL RULES:
+- Do NOT search the web. Use ONLY the article text the user provides.
+- The post MUST include the user's provided URL in the "source" field of the JSON output.
+- Do NOT invent quotes or facts not present in the article. If quoting, use regular quotation marks ("") and only quote text that actually appears in the article.
+- Do NOT include any <cite>, </cite>, or citation markup tags. Post content must be clean, readable text only.
+
+STYLE ANALYSIS — extract from the user's posts:
+- Narrative structure (how they open, build, and close)
+- Sentence rhythm and length patterns
+- Use of white space and line breaks
+- Vocabulary register
+- Perspective framing
+- Tone
+- Topic clusters
+
+POST GENERATION RULES:
+- Match the user's exact stylistic DNA — do not use generic LinkedIn voice
+- Do NOT use hashtags unless the user's posts consistently use them
+- 200–400 words, formatted with white space like the user's examples
+- Think critically, not just descriptively — add the user's analytical layer
+
+OUTPUT FORMAT — respond with ONLY valid JSON, no other text:
+{
+  "posts": [
+    {
+      "content": "The full post text here",
+      "articleTitle": "Short title of the source article",
+      "source": "the URL the user provided",
+      "publishedDate": "YYYY-MM-DD or empty string if unknown"
+    }
+  ]
+}`;
+
     // Send only the most recent 10 posts to the AI for style analysis
     const postSeparator = '\n\n---\n\n';
     const allPosts = posts.split(postSeparator);
@@ -84,7 +139,7 @@ OUTPUT FORMAT — respond with ONLY valid JSON, no other text:
       ? `\n\nFOCUS DIRECTIVE: The user wants posts specifically about: "${focus}". Search for recent news SPECIFICALLY about this topic. All generated posts MUST be related to this focus area. Still write in the user's voice and style.`
       : '';
 
-    const userMessage = `Today is ${today}.
+    const newsUserMessage = `Today is ${today}.
 
 Here are my most recent LinkedIn posts — analyse my writing style and topic profile from these:
 
@@ -96,6 +151,27 @@ Now search the web for the most recent news (published ONLY in the last 7 days, 
 
 Generate ${count} LinkedIn posts in my exact voice, each based on a different recent article. Include the publishedDate for each. Return only the JSON.`;
 
+    const articleUserMessage = articleMode
+      ? `Here are my most recent LinkedIn posts — analyse my writing style and topic profile from these:
+
+---
+${recentPosts}
+---
+
+Now write ONE LinkedIn post in my exact voice based on the article below. Do NOT search the web — use only what is in the <article> tags.
+
+<article>
+${articleTitle ? `Title: ${articleTitle}\n\n` : ''}${articleText}
+</article>
+
+The post must include this URL in the "source" field: ${articleUrl}
+
+Return only the JSON.`
+      : '';
+
+    const systemPrompt = articleMode ? articleSystemPrompt : newsSystemPrompt;
+    const userMessage = articleMode ? articleUserMessage : newsUserMessage;
+
     const encoder = new TextEncoder();
 
     const readable = new ReadableStream({
@@ -105,13 +181,17 @@ Generate ${count} LinkedIn posts in my exact voice, each based on a different re
             model: 'claude-sonnet-4-20250514',
             max_tokens: 2000,
             system: systemPrompt,
-            tools: [
-              {
-                type: 'web_search_20250305',
-                name: 'web_search',
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              } as any,
-            ],
+            ...(articleMode
+              ? {}
+              : {
+                  tools: [
+                    {
+                      type: 'web_search_20250305',
+                      name: 'web_search',
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    } as any,
+                  ],
+                }),
             messages: [{ role: 'user', content: userMessage }],
           });
 

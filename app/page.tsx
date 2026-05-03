@@ -28,11 +28,20 @@ export default function Home() {
   const [postCount, setPostCount] = useState(3);
   const [focusTopics, setFocusTopics] = useState('');
   const [addedToProfileId, setAddedToProfileId] = useState<string | null>(null);
+  const [aboutMe, setAboutMe] = useState('');
+  const [savedAboutMe, setSavedAboutMe] = useState('');
+  const [isSavingAboutMe, setIsSavingAboutMe] = useState(false);
+  const [aboutMeStatus, setAboutMeStatus] = useState('');
+  const [generateMode, setGenerateMode] = useState<'news' | 'article'>('news');
+  const [articleUrl, setArticleUrl] = useState('');
+  const [articleManualText, setArticleManualText] = useState('');
+  const [showManualPaste, setShowManualPaste] = useState(false);
 
   useEffect(() => {
     if (status === 'authenticated') {
       loadProfile();
       loadDrafts();
+      loadAboutMe();
       checkLinkedin();
     }
     // Handle LinkedIn OAuth callback
@@ -90,6 +99,34 @@ export default function Home() {
     } catch {}
   }
 
+  async function loadAboutMe() {
+    try {
+      const res = await fetch('/api/style');
+      const data = await res.json();
+      if (typeof data.aboutMe === 'string') {
+        setAboutMe(data.aboutMe);
+        setSavedAboutMe(data.aboutMe);
+      }
+    } catch {}
+  }
+
+  async function saveAboutMe() {
+    setIsSavingAboutMe(true);
+    setAboutMeStatus('Saving...');
+    try {
+      await fetch('/api/style', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aboutMe }),
+      });
+      setSavedAboutMe(aboutMe);
+      setAboutMeStatus('✓ Voice notes saved.');
+    } catch {
+      setAboutMeStatus('Error saving voice notes.');
+    }
+    setIsSavingAboutMe(false);
+  }
+
   async function loadDrafts() {
     try {
       const res = await fetch('/api/drafts');
@@ -121,14 +158,62 @@ export default function Home() {
       setGenerateStatus('Please save your LinkedIn posts in the Profile tab first.');
       return;
     }
+
+    let articleTextForGen: string | undefined;
+    let articleTitleForGen: string | undefined;
+    let articleUrlForGen: string | undefined;
+
+    if (generateMode === 'article') {
+      if (!articleUrl.trim()) {
+        setGenerateStatus('Please paste an article URL.');
+        return;
+      }
+      articleUrlForGen = articleUrl.trim();
+
+      if (showManualPaste && articleManualText.trim()) {
+        articleTextForGen = articleManualText.trim().slice(0, 8000);
+      } else {
+        setIsGenerating(true);
+        setGeneratedPosts([]);
+        setGenerateStatus('Reading article...');
+        try {
+          const extractRes = await fetch('/api/extract-article', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: articleUrlForGen }),
+          });
+          const extractData = await extractRes.json();
+          if (!extractRes.ok || !extractData.content) {
+            setGenerateStatus(extractData.error || 'Could not read this article. Toggle "Paste text manually" and paste the article body.');
+            setIsGenerating(false);
+            return;
+          }
+          articleTextForGen = extractData.content;
+          articleTitleForGen = extractData.title || undefined;
+        } catch {
+          setGenerateStatus('Could not read this article. Toggle "Paste text manually" and paste the article body.');
+          setIsGenerating(false);
+          return;
+        }
+      }
+    }
+
     setIsGenerating(true);
     setGeneratedPosts([]);
-    setGenerateStatus('Searching recent news and generating posts...');
+    setGenerateStatus(generateMode === 'article' ? 'Writing post in your voice...' : 'Searching recent news and generating posts...');
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ posts: loadedPosts, count: postCount, focus: focusTopics.trim() || undefined }),
+        body: JSON.stringify({
+          posts: loadedPosts,
+          count: postCount,
+          focus: generateMode === 'news' ? (focusTopics.trim() || undefined) : undefined,
+          aboutMe: savedAboutMe.trim() || undefined,
+          articleUrl: articleUrlForGen,
+          articleText: articleTextForGen,
+          articleTitle: articleTitleForGen,
+        }),
       });
 
       if (!res.ok) {
@@ -351,34 +436,85 @@ export default function Home() {
           <div className="tab-content">
             <div className="section-label">GENERATE</div>
             <p className="section-desc">
-              Searches the last 72 hours of news matching your topic profile and drafts posts in your voice.
+              {generateMode === 'news'
+                ? 'Searches the last 72 hours of news matching your topic profile and drafts posts in your voice.'
+                : 'Drafts a single post in your voice based on a specific article you provide.'}
             </p>
 
-            <div className="focus-row">
-              <label className="count-label" htmlFor="focus-input">Focus topics (optional)</label>
-              <input
-                id="focus-input"
-                className="focus-input"
-                type="text"
-                value={focusTopics}
-                onChange={e => setFocusTopics(e.target.value)}
-                placeholder="e.g. Google Cloud Next, EU AI Act..."
-              />
-              <span className="focus-hint">Leave empty for auto-detect from your profile</span>
+            <div className="mode-toggle">
+              <button
+                className={`mode-btn${generateMode === 'news' ? ' active' : ''}`}
+                onClick={() => setGenerateMode('news')}
+              >From recent news</button>
+              <button
+                className={`mode-btn${generateMode === 'article' ? ' active' : ''}`}
+                onClick={() => setGenerateMode('article')}
+              >From an article</button>
             </div>
 
-            <div className="count-row">
-              <span className="count-label">Posts to generate</span>
-              <div className="count-controls">
-                {[2, 3, 4, 5].map(n => (
-                  <button
-                    key={n}
-                    className={`count-btn${postCount === n ? ' active' : ''}`}
-                    onClick={() => setPostCount(n)}
-                  >{n}</button>
-                ))}
-              </div>
-            </div>
+            {generateMode === 'news' ? (
+              <>
+                <div className="focus-row">
+                  <label className="count-label" htmlFor="focus-input">Focus topics (optional)</label>
+                  <input
+                    id="focus-input"
+                    className="focus-input"
+                    type="text"
+                    value={focusTopics}
+                    onChange={e => setFocusTopics(e.target.value)}
+                    placeholder="e.g. Google Cloud Next, EU AI Act..."
+                  />
+                  <span className="focus-hint">Leave empty for auto-detect from your profile</span>
+                </div>
+
+                <div className="count-row">
+                  <span className="count-label">Posts to generate</span>
+                  <div className="count-controls">
+                    {[2, 3, 4, 5].map(n => (
+                      <button
+                        key={n}
+                        className={`count-btn${postCount === n ? ' active' : ''}`}
+                        onClick={() => setPostCount(n)}
+                      >{n}</button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="focus-row">
+                  <label className="count-label" htmlFor="article-url-input">Article URL</label>
+                  <input
+                    id="article-url-input"
+                    className="focus-input"
+                    type="url"
+                    value={articleUrl}
+                    onChange={e => setArticleUrl(e.target.value)}
+                    placeholder="https://..."
+                  />
+                  <span className="focus-hint">The article URL will be embedded in the generated post.</span>
+                </div>
+
+                <button
+                  className="manual-paste-toggle"
+                  onClick={() => setShowManualPaste(v => !v)}
+                  type="button"
+                >
+                  {showManualPaste ? '− Hide manual paste' : '+ Paste article text manually (use if URL is paywalled)'}
+                </button>
+
+                {showManualPaste && (
+                  <textarea
+                    className="profile-textarea"
+                    style={{ minHeight: 180 }}
+                    value={articleManualText}
+                    onChange={e => setArticleManualText(e.target.value)}
+                    placeholder="Paste the article body here..."
+                    rows={8}
+                  />
+                )}
+              </>
+            )}
 
             <button
               className="primary-btn"
@@ -558,6 +694,31 @@ export default function Home() {
                 {profileStatus}
               </div>
             )}
+
+            <div className="section-label" style={{ marginTop: 24 }}>VOICE & BACKGROUND</div>
+            <p className="section-desc">
+              Optional. A self-description that helps capture your tone, opinions, and recurring themes — appended to every generation. Tip: ask ChatGPT (in an account that knows you well) for a third-person briefing covering your role, recurring topics, opinions, voice, sentence patterns, vocabulary, and what you never do. Paste the result here.
+            </p>
+            <textarea
+              className="profile-textarea"
+              style={{ minHeight: 200 }}
+              value={aboutMe}
+              onChange={e => setAboutMe(e.target.value)}
+              placeholder="e.g. Senior engineer with 10 years in distributed systems; writes dryly, allergic to corporate-speak; opens with a contrarian observation; never uses hashtags or emojis..."
+              rows={10}
+            />
+            <button
+              className="primary-btn"
+              onClick={saveAboutMe}
+              disabled={isSavingAboutMe || aboutMe === savedAboutMe}
+            >
+              {isSavingAboutMe ? 'Saving...' : 'Save voice notes'}
+            </button>
+            {aboutMeStatus && (
+              <div className={`status-msg ${aboutMeStatus.includes('Error') ? 'status-error' : 'status-success'}`}>
+                {aboutMeStatus}
+              </div>
+            )}
           </div>
         )}
       </main>
@@ -599,6 +760,11 @@ export default function Home() {
         .tab-content{display:flex;flex-direction:column;gap:16px}
         .section-label{font-size:11px;letter-spacing:2px;color:var(--gold);font-weight:600}
         .section-desc{font-size:14px;color:var(--muted);line-height:1.5}
+        .mode-toggle{display:flex;background:var(--cream);border:1px solid var(--border);border-radius:var(--radius);padding:4px;gap:4px}
+        .mode-btn{flex:1;padding:10px 12px;background:transparent;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:all 0.15s}
+        .mode-btn.active{background:var(--accent);color:#fff}
+        .manual-paste-toggle{background:transparent;border:none;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;padding:4px 0;text-align:left;align-self:flex-start}
+        .manual-paste-toggle:hover{color:var(--accent)}
         .focus-row{display:flex;flex-direction:column;gap:8px;background:var(--cream);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
         .focus-input{width:100%;background:var(--paper);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--ink)}
         .focus-input:focus{outline:none;border-color:var(--accent)}
